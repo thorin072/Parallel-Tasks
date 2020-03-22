@@ -6,24 +6,18 @@ using System.Windows.Forms;
 
 namespace ParallelTasks
 {
+    public class ArraysTurple
+    {
+        public int[,] M1 { get; set; }
+        public int[] M2 { get; set; }
+    }
+
     public class Parallel
     {
         private Form1 form;
-        private int n;
+        private int n; //размер массива
 
         private Queue<string> q;
-
-        private int[,] M;
-        private bool[] R;
-
-        private int[,] resC;
-        private int resD;
-        private int resE;
-        private int resF;
-        private int resG;
-        private int resH;
-        private int resK;
-
         public delegate void TaskHandler(string s);
         private event TaskHandler TaskComplete;
 
@@ -31,51 +25,53 @@ namespace ParallelTasks
         {
             this.form = form;
             this.n = n;
-
             q = new Queue<string>();
-
             TaskComplete += Log;
         }
 
         public void Execute()
         {
-            Task[] ab = new Task[2];
-            ab[0] = Task.Run(A);
-            ab[1] = Task.Run(B);
-
-            Task.WaitAll(ab);
-            form.Progress(0);
-            while (q.Count > 0)
-                form.Log("Task complete: " + q.Dequeue());
-            Task c = Task.Run(C);
-
-            Task.WaitAll(c);
+            int i = 0;
+            Task<ArraysTurple> a = new Task<ArraysTurple>(() => A());
+            a.Start();
+            a.Wait();
             form.Progress(1);
-            while (q.Count > 0)
+            while (q.Count > i)
                 form.Log("Task complete: " + q.Dequeue());
-            Task[] de = new Task[2];
-            de[0] = Task.Run(D);
-            de[1] = Task.Run(E);
-            Task[] fgh = new Task[3];
-            fgh[0] = Task.Run(F);
-
-            Task.WaitAll(de);
-            form.Progress(2);
-            while (q.Count > 0)
+            var b = a.ContinueWith(x => B(x.Result));
+            var c = a.ContinueWith(x => C(x.Result));
+            Task.WaitAll(b, c);
+            while (q.Count > i)
                 form.Log("Task complete: " + q.Dequeue());
-            fgh[1] = Task.Run(G);
-            fgh[2] = Task.Run(H);
-
-            Task.WaitAll(fgh);
             form.Progress(3);
-            while (q.Count > 0)
+            var d = b.ContinueWith(x => D(x.Result));
+            var e = c.ContinueWith(x => E(x.Result));
+            Task.WaitAll(d, e);
+            while (q.Count > i)
                 form.Log("Task complete: " + q.Dequeue());
-            Task k = Task.Run(K);
+            form.Progress(5);
+            // form.Progress();
+            var fgh = new Task<int>[3] {
+                new Task<int>(() => F(e.Result,d.Result)),
+                new Task<int>(() => G(e.Result,d.Result)),
+                new Task<int>(() => H(e.Result,d.Result))
+            };
 
-            Task.WaitAll(k);
-            form.Progress(4);
-            while (q.Count > 0)
+            foreach (var t in fgh)
+                t.Start();
+            Task.WaitAll(fgh);
+            while (q.Count > i)
                 form.Log("Task complete: " + q.Dequeue());
+            form.Progress(8);
+            var k = new Task(() => K(fgh[0].Result, fgh[1].Result, fgh[2].Result));
+            k.Start();
+            k.Wait();
+            while (q.Count > i)
+                form.Log("Task complete: " + q.Dequeue());
+            form.Progress(9);
+            form.Log("DONE");
+            q.Clear();
+
         }
 
         public void Log(string invoker)
@@ -83,111 +79,99 @@ namespace ParallelTasks
             q.Enqueue(invoker);
         }
 
-        public void A()
+        public ArraysTurple A()
         {
-            M = new int[n, n];
+            int[,] M1 = new int[n, n];
+            int[] M2 = new int[n];
+
             Random rand = new Random();
 
             for (int i = 0; i < n; i++)
             {
                 for (int j = 0; j < n; j++)
                 {
-                    M[i, j] = rand.Next(n);
+                    M1[i, j] = rand.Next(n);
                 }
+            }
+
+            for (int i = 0; i < M2.Length; i++)
+            {
+                M2[i] = rand.Next(0, 100);
             }
 
             TaskComplete?.Invoke("A");
+            return new ArraysTurple { M1 = M1, M2 = M2 };
         }
 
-        public void B()
+        public int B(ArraysTurple result)
         {
-            R = new bool[n];
-            Random rand = new Random();
-
-            for (int i = 0; i < n; i++)
-            {
-                R[i] = rand.Next(2) == 1;
-            }
-
-            TaskComplete?.Invoke("B");
-        }
-
-        public void C()
-        {
-            resC = new int[n, n];
+            var M1 = result.M1;
+            var M2 = result.M2;
+            int res = 0;
             for (int i = 0; i < n; i++)
             {
                 for (int j = 0; j < n; j++)
                 {
-                    //some func
-                    if (R[i])
-                    {
-                        resC[i, j] = M[i, j];
-                    }
+                    res = M1[i, j] + res;
                 }
             }
 
+            TaskComplete?.Invoke("B");
+            return res;
+        }
+
+        public int C(ArraysTurple result)
+        {
+            var M1 = result.M1;
+            var M2 = result.M2;
+            int res = 0;
+            for (int i = 0; i < M2.Length; i++)
+            {
+                res = M2[i] - 100;
+            }
             TaskComplete?.Invoke("C");
+            return res;
         }
 
-        public void D()
+        public int D(int result)
         {
-            resD = 0;
-            foreach (var i in resC)
-            {
-                //some func
-                resD += i;
-            }
-
+            var res = result + 100;
             TaskComplete?.Invoke("D");
+            return res;
         }
 
-        public void E()
+        public int E(int result)
         {
-            resE = 1;
-            foreach (var i in resC)
-            {
-                //some func
-                resE *= i;
-            }
-
+            var res = result / 50;
             TaskComplete?.Invoke("E");
+            return res;
         }
 
-        public void F()
+        public int F(int resE,int resD)
         {
-            resE = 1;
-            foreach (var i in resC)
-            {
-                //some func
-                resE *= i;
-                resE -= 10 * i;
-            }
-
+            int res = resD * resE;
             TaskComplete?.Invoke("F");
+            return res;
         }
 
-        public void G()
+        public int G(int resE, int resD)
         {
-            //some func
-            resG = resD * 2;
-
+            int res = (resD * resE)-45;
             TaskComplete?.Invoke("G");
+            return res;
         }
 
-        public void H()
+        public int H(int resE, int resD)
         {
-            //some func
-            resH = resE + 100;
-
+            int res = resD * resE*3;
             TaskComplete?.Invoke("H");
+            return res;
         }
 
-        public void K()
+        public void K(int resF, int resG,int resH)
         {
             //some func
-            resK = resG + resH;
-
+            int res = resF + resG + resH;
             TaskComplete?.Invoke("K");
         }
     }
