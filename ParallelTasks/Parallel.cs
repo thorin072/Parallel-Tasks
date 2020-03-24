@@ -16,7 +16,6 @@ namespace ParallelTasks
     {
         private Form1 form;
         private int n; //размер массива
-
         private Queue<string> q;
         public delegate void TaskHandler(string s);
         private event TaskHandler TaskComplete;
@@ -31,15 +30,27 @@ namespace ParallelTasks
 
         public void Execute()
         {
+			// Главный поток 
             int i = 0;
+			//Task который возвращает значение внутри себя
             Task<ArraysTurple> a = new Task<ArraysTurple>(() => A());
+			// Запуск задачи и передача управления
             a.Start();
+			// Ожидание, пока закончиться поток А. Все управление передаеться только потоку А,
+			// код в процедуре "А" являеться критической секцией, главный поток блокируеться, пока не будет выполнен поток получивший управление 
             a.Wait();
+			// В главном потоке устанавливаем progress bar
             form.Progress(1);
+			// Вывод завершенного Task из очереди
             while (q.Count > i)
                 form.Log("Task complete: " + q.Dequeue());
+			// ContinueWith - cоздает задачу продолжения, которая выполняется после завершения другой задачи (в данном случаи А)
+			// Задачи исполняються параллельно
+			// x => B(x.Result) - это лямбда выражение для получения результата из предыдущего Task
+			// В данной реализации каждый Task<> будет иметь поле .Result 
             var b = a.ContinueWith(x => B(x.Result));
             var c = a.ContinueWith(x => C(x.Result));
+			// Ожидание пока будут завершены все Tasks 
             Task.WaitAll(b, c);
             while (q.Count > i)
                 form.Log("Task complete: " + q.Dequeue());
@@ -50,19 +61,21 @@ namespace ParallelTasks
             while (q.Count > i)
                 form.Log("Task complete: " + q.Dequeue());
             form.Progress(5);
-            // form.Progress();
+       
+			// Task могут быть так же описаны сразу массивом задач
             var fgh = new Task<int>[3] {
                 new Task<int>(() => F(e.Result,d.Result)),
                 new Task<int>(() => G(e.Result,d.Result)),
                 new Task<int>(() => H(e.Result,d.Result))
             };
-
+			// Запуск параллельно сразу всех задач из массива
             foreach (var t in fgh)
                 t.Start();
             Task.WaitAll(fgh);
             while (q.Count > i)
                 form.Log("Task complete: " + q.Dequeue());
             form.Progress(8);
+			// Данный Task ничего не возвратит 
             var k = new Task(() => K(fgh[0].Result, fgh[1].Result, fgh[2].Result));
             k.Start();
             k.Wait();
@@ -71,7 +84,6 @@ namespace ParallelTasks
             form.Progress(9);
             form.Log("DONE");
             q.Clear();
-
         }
 
         public void Log(string invoker)
@@ -93,12 +105,10 @@ namespace ParallelTasks
                     M1[i, j] = rand.Next(n);
                 }
             }
-
             for (int i = 0; i < M2.Length; i++)
             {
                 M2[i] = rand.Next(0, 100);
             }
-
             TaskComplete?.Invoke("A");
             return new ArraysTurple { M1 = M1, M2 = M2 };
         }
